@@ -1,0 +1,16 @@
+# Compiled output
+bin/
+out/
+*.jar
+*.class
+
+# IDE
+.idea/
+*.iml
+
+# Claude AI session
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
