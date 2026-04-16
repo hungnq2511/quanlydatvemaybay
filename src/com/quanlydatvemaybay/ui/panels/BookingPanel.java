@@ -161,10 +161,7 @@ public class BookingPanel extends JPanel {
         table.setRowHeight(36);
         table.setShowGrid(false);
         table.setIntercellSpacing(new Dimension(0, 0));
-        table.getTableHeader().setFont(UIConstants.HEADER_FONT);
-        table.getTableHeader().setBackground(UIConstants.TABLE_HEADER_BG);
-        table.getTableHeader().setForeground(Color.WHITE);
-        table.getTableHeader().setReorderingAllowed(false);
+        UIConstants.applyTableHeaderStyle(table);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setSelectionBackground(new Color(210, 230, 255));
 

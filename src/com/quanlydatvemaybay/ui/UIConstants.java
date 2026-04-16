@@ -1,5 +1,8 @@
 package com.quanlydatvemaybay.ui;
 
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -38,4 +41,26 @@ public class UIConstants {
 
     public static final int BUTTON_HEIGHT = 36;
     public static final int INPUT_HEIGHT  = 32;
+
+    /**
+     * Áp dụng custom renderer cho header của JTable để đảm bảo màu nền
+     * hiển thị đúng trên cả Windows và macOS (tránh bị L&F ghi đè).
+     */
+    public static void applyTableHeaderStyle(JTable table) {
+        table.getTableHeader().setReorderingAllowed(false);
+        table.getTableHeader().setDefaultRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable t, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
+                JLabel lbl = (JLabel) super.getTableCellRendererComponent(t, value, isSelected, hasFocus, row, col);
+                lbl.setBackground(TABLE_HEADER_BG);
+                lbl.setForeground(Color.WHITE);
+                lbl.setFont(HEADER_FONT);
+                lbl.setOpaque(true);
+                lbl.setBorder(new EmptyBorder(0, 10, 0, 10));
+                lbl.setHorizontalAlignment(JLabel.LEFT);
+                return lbl;
+            }
+        });
+    }
 }
