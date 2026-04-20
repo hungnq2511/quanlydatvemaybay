@@ -91,6 +91,100 @@ public class UserDAO {
         return u;
     }
 
+    public Optional<User> findById(Long id) throws SQLException {
+        String sql = "SELECT * FROM USERS WHERE ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    User u = mapRow(rs);
+                    u.setRole(findRoleByUserId(u.getId()));
+                    return Optional.of(u);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public List<User> findAllWithRoles() throws SQLException {
+        List<User> list = findAll();
+        for (User u : list) {
+            u.setRole(findRoleByUserId(u.getId()));
+        }
+        return list;
+    }
+
+    public List<User> search(String keyword) throws SQLException {
+        List<User> list = new ArrayList<>();
+        String sql = "SELECT * FROM USERS WHERE UPPER(USER_NAME) LIKE UPPER(?) OR UPPER(FULL_NAME) LIKE UPPER(?) ORDER BY ID DESC";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            String kw = "%" + keyword + "%";
+            ps.setString(1, kw);
+            ps.setString(2, kw);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    User u = mapRow(rs);
+                    u.setRole(findRoleByUserId(u.getId()));
+                    list.add(u);
+                }
+            }
+        }
+        return list;
+    }
+
+    public void update(User u) throws SQLException {
+        String sql = "UPDATE USERS SET FULL_NAME=?, EMAIL=?, SDT=? WHERE ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, u.getFullName());
+            ps.setString(2, u.getEmail());
+            ps.setString(3, u.getSdt());
+            ps.setLong(4, u.getId());
+            ps.executeUpdate();
+        }
+    }
+
+    public void updateStatus(Long id, boolean status) throws SQLException {
+        String sql = "UPDATE USERS SET STATUS=? WHERE ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setInt(1, status ? 1 : 0);
+            ps.setLong(2, id);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updatePassword(Long id, String hashedPassword) throws SQLException {
+        String sql = "UPDATE USERS SET PASSWORD=? WHERE ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, hashedPassword);
+            ps.setLong(2, id);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updateRole(Long userId, String roleId) throws SQLException {
+        // Xóa role cũ rồi insert role mới
+        String deleteSql = "DELETE FROM USER_ROLE WHERE USER_ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(deleteSql)) {
+            ps.setLong(1, userId);
+            ps.executeUpdate();
+        }
+        saveUserRole(userId, roleId);
+    }
+
+    public void delete(Long id) throws SQLException {
+        // Xóa role trước
+        String deleteRole = "DELETE FROM USER_ROLE WHERE USER_ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(deleteRole)) {
+            ps.setLong(1, id);
+            ps.executeUpdate();
+        }
+        String sql = "DELETE FROM USERS WHERE ID=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setLong(1, id);
+            ps.executeUpdate();
+        }
+    }
+
     public boolean existsByUserName(String userName) throws SQLException {
         String sql = "SELECT COUNT(*) FROM USERS WHERE USER_NAME=?";
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
@@ -100,5 +194,14 @@ public class UserDAO {
             }
         }
         return false;
+    }
+
+    public long countAdmins() throws SQLException {
+        String sql = "SELECT COUNT(*) FROM USER_ROLE WHERE ROLE_ID='ADMIN'";
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) return rs.getLong(1);
+        }
+        return 0;
     }
 }

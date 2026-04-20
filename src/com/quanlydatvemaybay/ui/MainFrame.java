@@ -6,6 +6,7 @@ import com.quanlydatvemaybay.ui.panels.BookingPanel;
 import com.quanlydatvemaybay.ui.panels.DashboardPanel;
 import com.quanlydatvemaybay.ui.panels.FlightPanel;
 import com.quanlydatvemaybay.ui.panels.TicketPanel;
+import com.quanlydatvemaybay.ui.panels.UserPanel;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -22,6 +23,7 @@ public class MainFrame extends JFrame {
     private TicketPanel ticketPanel;
     private FlightPanel flightPanel;
     private BookingPanel bookingPanel;
+    private UserPanel userPanel;
 
     public MainFrame() {
         setTitle("Quản Lý Đặt Vé Máy Bay");
@@ -47,6 +49,7 @@ public class MainFrame extends JFrame {
         flightPanel = new FlightPanel();
         ticketPanel = new TicketPanel();
         bookingPanel = new BookingPanel();
+        userPanel = new UserPanel();
 
         User currentUser = AuthService.getCurrentUser();
         boolean isAdmin = currentUser != null && currentUser.isAdmin();
@@ -55,6 +58,7 @@ public class MainFrame extends JFrame {
             contentPanel.add(dashboardPanel, "dashboard");
             contentPanel.add(flightPanel, "flights");
             contentPanel.add(ticketPanel, "tickets");
+            contentPanel.add(userPanel, "users");
         }
         contentPanel.add(bookingPanel, "bookings");
 
@@ -101,8 +105,11 @@ public class MainFrame extends JFrame {
             addNavItem(navPanel, "  Tổng quan", "dashboard");
             addNavItem(navPanel, "  Chuyến bay", "flights");
             addNavItem(navPanel, "  Vé máy bay", "tickets");
+            addNavItem(navPanel, "  Đặt vé", "bookings");
+            addNavItem(navPanel, "  Người dùng", "users");
+        } else {
+            addNavItem(navPanel, "  Đặt vé", "bookings");
         }
-        addNavItem(navPanel, "  Đặt vé", "bookings");
 
         // Bottom - logout
         JPanel bottomPanel = new JPanel(new BorderLayout());
@@ -178,5 +185,6 @@ public class MainFrame extends JFrame {
         else if ("flights".equals(name)) flightPanel.refresh();
         else if ("tickets".equals(name)) ticketPanel.refresh();
         else if ("bookings".equals(name)) bookingPanel.refresh();
+        else if ("users".equals(name)) userPanel.refresh();
     }
 }
