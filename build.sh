@@ -17,12 +17,17 @@ fi
 
 echo "Java version: $(java -version 2>&1 | head -1)"
 
-# Check Oracle JDBC driver
+# Collect all JARs in lib/
 JDBC_JAR=""
+MAIL_JAR=""
+ALL_JARS=""
 for jar in "$LIB_DIR"/*.jar; do
     if [[ -f "$jar" ]]; then
-        JDBC_JAR="$jar"
-        echo "Found JDBC driver: $jar"
+        name=$(basename "$jar")
+        echo "Found library: $jar"
+        ALL_JARS="$ALL_JARS:$jar"
+        if [[ "$name" == ojdbc* ]]; then JDBC_JAR="$jar"; fi
+        if [[ "$name" == javax.mail* ]]; then MAIL_JAR="$jar"; fi
     fi
 done
 
@@ -36,7 +41,12 @@ if [[ -z "$JDBC_JAR" ]]; then
     if [[ "$choice" != "y" ]]; then exit 1; fi
     CLASSPATH="$SRC_DIR"
 else
-    CLASSPATH="$SRC_DIR:$JDBC_JAR"
+    CLASSPATH="$SRC_DIR$ALL_JARS"
+fi
+
+if [[ -z "$MAIL_JAR" ]]; then
+    echo "WARNING: javax.mail-1.6.2.jar not found in lib/ — email features will not work."
+    echo "Copy javax.mail-1.6.2.jar from ~/.m2/repository/com/sun/mail/javax.mail/1.6.2/ to lib/"
 fi
 
 # Clean
@@ -67,12 +77,15 @@ echo "Compilation successful!"
 echo ""
 echo "Creating JAR..."
 
-# Create manifest
+# Create manifest with all lib JARs on Class-Path
 MANIFEST="$BIN_DIR/MANIFEST.MF"
 echo "Main-Class: com.quanlydatvemaybay.Main" > "$MANIFEST"
-if [[ -n "$JDBC_JAR" ]]; then
-    JDBC_NAME=$(basename "$JDBC_JAR")
-    echo "Class-Path: lib/$JDBC_NAME" >> "$MANIFEST"
+CP_LINE=""
+for jar in "$LIB_DIR"/*.jar; do
+    [[ -f "$jar" ]] && CP_LINE="$CP_LINE lib/$(basename "$jar")"
+done
+if [[ -n "$CP_LINE" ]]; then
+    echo "Class-Path:$CP_LINE" >> "$MANIFEST"
 fi
 
 cd "$BIN_DIR"
@@ -89,8 +102,8 @@ echo ""
 echo "===== Build Complete ====="
 echo ""
 echo "To run the application:"
-if [[ -n "$JDBC_JAR" ]]; then
-    echo "  java -cp \"$JAR_NAME:$JDBC_JAR\" com.quanlydatvemaybay.Main"
+if [[ -n "$ALL_JARS" ]]; then
+    echo "  java -cp \"$JAR_NAME$ALL_JARS\" com.quanlydatvemaybay.Main"
 else
     echo "  java -jar $JAR_NAME"
 fi

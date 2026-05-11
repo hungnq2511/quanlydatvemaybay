@@ -26,6 +26,12 @@ public class BookingDialog extends JDialog {
     private final FlightService flightService = new FlightService();
     private final TicketService ticketService = new TicketService();
     private static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+            java.util.regex.Pattern.compile("^[\\w._%+\\-]+@[\\w.\\-]+\\.[a-zA-Z]{2,}$");
+    private static final java.util.regex.Pattern PHONE_PATTERN =
+            java.util.regex.Pattern.compile("^(0[3-9][0-9]{8}|\\+84[3-9][0-9]{8})$");
+    private static final java.util.regex.Pattern IDCARD_PATTERN =
+            java.util.regex.Pattern.compile("^([0-9]{9,12}|[A-Z]{1,2}[0-9]{7,8})$");
 
     private JComboBox<String> cmbFlight;
     private JComboBox<String> cmbTicket;
@@ -115,9 +121,9 @@ public class BookingDialog extends JDialog {
         row++;
 
         txtName   = addField(form, gbc, row++, "Họ tên *");
-        txtPhone  = addField(form, gbc, row++, "Số điện thoại");
-        txtEmail  = addField(form, gbc, row++, "Email");
-        txtIdCard = addField(form, gbc, row++, "CCCD / Hộ chiếu");
+        txtPhone  = addField(form, gbc, row++, "Số điện thoại *");
+        txtEmail  = addField(form, gbc, row++, booking == null ? "Email *" : "Email");
+        txtIdCard = addField(form, gbc, row++, "CCCD / Hộ chiếu *");
 
         // --- Trạng thái (chỉ khi sửa) ---
         if (booking != null) {
@@ -185,13 +191,11 @@ public class BookingDialog extends JDialog {
 
     private void loadFlights() {
         try {
-            flightList = flightService.getAll();
+            flightList = flightService.getAll().stream()
+                    .filter(f -> f.getStatus() == FlightStatus.SCHEDULED)
+                    .collect(java.util.stream.Collectors.toList());
             cmbFlight.addItem("-- Chọn chuyến bay --");
             for (Flight f : flightList) {
-                // Chỉ hiện chuyến bay có thể đặt vé
-                if (f.getStatus() == FlightStatus.CANCELLED ||
-                    f.getStatus() == FlightStatus.ARRIVED ||
-                    f.getStatus() == FlightStatus.DEPARTED) continue;
                 cmbFlight.addItem(f.getFlightCode() + " | " + f.getDepartureAirport()
                         + " → " + f.getArrivalAirport()
                         + " | " + (f.getDepartureTime() != null ? f.getDepartureTime().format(DTF) : ""));
@@ -220,8 +224,7 @@ public class BookingDialog extends JDialog {
                 .findFirst().orElse(null);
         if (flight == null) return;
 
-        lblFlightInfo.setText("Ghế còn trống: " + flight.getAvailableSeats()
-                + "  |  Giá từ: " + String.format("%,.0f VNĐ", flight.getPrice()));
+        lblFlightInfo.setText("Ghế còn trống: " + flight.getAvailableSeats());
 
         try {
             ticketList = ticketService.search(flight.getId(), TicketStatus.AVAILABLE);
@@ -252,12 +255,75 @@ public class BookingDialog extends JDialog {
     private void save() {
         String name = txtName.getText().trim();
         if (name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập tên hành khách!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập họ tên hành khách!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            txtName.requestFocus();
+            return;
+        }
+        if (name.length() < 2) {
+            JOptionPane.showMessageDialog(this, "Họ tên phải có ít nhất 2 ký tự!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            txtName.requestFocus();
+            return;
+        }
+        if (name.matches(".*[0-9].*")) {
+            JOptionPane.showMessageDialog(this, "Họ tên không được chứa chữ số!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            txtName.requestFocus();
             return;
         }
         String email  = txtEmail.getText().trim();
         String phone  = txtPhone.getText().trim();
         String idCard = txtIdCard.getText().trim();
+
+        // Validate email khi đặt vé mới (bắt buộc)
+        if (booking == null) {
+            if (email.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "Vui lòng nhập email để nhận thông tin vé!",
+                        "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
+                txtEmail.requestFocus();
+                return;
+            }
+            if (!EMAIL_PATTERN.matcher(email).matches()) {
+                JOptionPane.showMessageDialog(this,
+                        "Email không đúng định dạng!\nVí dụ: example@gmail.com",
+                        "Email không hợp lệ", JOptionPane.ERROR_MESSAGE);
+                txtEmail.requestFocus();
+                return;
+            }
+        } else if (!email.isEmpty() && !EMAIL_PATTERN.matcher(email).matches()) {
+            JOptionPane.showMessageDialog(this,
+                    "Email không đúng định dạng!\nVí dụ: example@gmail.com",
+                    "Email không hợp lệ", JOptionPane.ERROR_MESSAGE);
+            txtEmail.requestFocus();
+            return;
+        }
+
+        // Validate số điện thoại (bắt buộc)
+        if (phone.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập số điện thoại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            txtPhone.requestFocus();
+            return;
+        }
+        if (!PHONE_PATTERN.matcher(phone).matches()) {
+            JOptionPane.showMessageDialog(this,
+                    "Số điện thoại không hợp lệ!\nVui lòng nhập số điện thoại Việt Nam 10 số (bắt đầu bằng 03x, 05x, 07x, 08x, 09x).\nVí dụ: 0901234567",
+                    "Số điện thoại không hợp lệ", JOptionPane.ERROR_MESSAGE);
+            txtPhone.requestFocus();
+            return;
+        }
+
+        // Validate CCCD / Hộ chiếu (bắt buộc)
+        if (idCard.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập CCCD hoặc số hộ chiếu!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            txtIdCard.requestFocus();
+            return;
+        }
+        if (!IDCARD_PATTERN.matcher(idCard.toUpperCase()).matches()) {
+            JOptionPane.showMessageDialog(this,
+                    "CCCD/Hộ chiếu không hợp lệ!\n• CCCD/CMND: 9-12 chữ số\n• Hộ chiếu: 1-2 chữ cái + 7-8 chữ số (VD: B1234567)",
+                    "CCCD/Hộ chiếu không hợp lệ", JOptionPane.ERROR_MESSAGE);
+            txtIdCard.requestFocus();
+            return;
+        }
 
         try {
             if (booking == null) {
@@ -275,11 +341,13 @@ public class BookingDialog extends JDialog {
                     return;
                 }
                 Long ticketId = ticketList.get(ticketIdx).getId();
-                bookingService.create(ticketId, name,
-                        email.isEmpty() ? null : email,
+                bookingService.create(ticketId, name, email,
                         phone.isEmpty() ? null : phone,
                         idCard.isEmpty() ? null : idCard);
-                JOptionPane.showMessageDialog(this, "Đặt vé thành công!");
+                JOptionPane.showMessageDialog(this,
+                        "<html>Đặt vé thành công!<br>"
+                        + "Thông tin vé đã được gửi đến email:<br><b>" + email + "</b></html>",
+                        "Thành công", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 BookingStatus status = booking.getStatus();
                 if (cmbStatus != null) {

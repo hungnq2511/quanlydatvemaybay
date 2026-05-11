@@ -189,4 +189,22 @@ public class FlightDAO {
         }
         return false;
     }
+
+    public String generateNextCode(String airlinePrefix) throws SQLException {
+        String sql = "SELECT FLIGHT_CODE FROM FLIGHT WHERE FLIGHT_CODE LIKE ?";
+        int maxNum = 0;
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, airlinePrefix + "%");
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String code = rs.getString(1);
+                    try {
+                        int num = Integer.parseInt(code.substring(airlinePrefix.length()));
+                        if (num > maxNum) maxNum = num;
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+        return String.format("%s%03d", airlinePrefix, maxNum + 1);
+    }
 }

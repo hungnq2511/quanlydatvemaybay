@@ -1,5 +1,10 @@
 package com.quanlydatvemaybay.ui.dialogs;
 
+import com.quanlydatvemaybay.dao.AirlineDAO;
+import com.quanlydatvemaybay.dao.AirportDAO;
+import com.quanlydatvemaybay.dao.FlightDAO;
+import com.quanlydatvemaybay.entity.Airline;
+import com.quanlydatvemaybay.entity.Airport;
 import com.quanlydatvemaybay.entity.Flight;
 import com.quanlydatvemaybay.enums.FlightStatus;
 import com.quanlydatvemaybay.service.FlightService;
@@ -7,27 +12,40 @@ import com.quanlydatvemaybay.ui.UIConstants;
 
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.text.JTextComponent;
 import java.awt.*;
+import java.awt.event.ItemEvent;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
 
 public class FlightDialog extends JDialog {
 
     private boolean confirmed = false;
     private final Flight flight;
     private final FlightService flightService = new FlightService();
-    private static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private final FlightDAO flightDAO = new FlightDAO();
+    private final AirlineDAO airlineDAO = new AirlineDAO();
+    private final AirportDAO airportDAO = new AirportDAO();
 
-    private JTextField txtCode, txtAirline, txtDeparture, txtArrival;
-    private JTextField txtDepTime, txtArrTime, txtSeats, txtPrice;
+    private JTextField txtCode;
+    private JComboBox<Airline> cmbAirline;
+    private JComboBox<Airport> cmbDeparture;
+    private JComboBox<Airport> cmbArrival;
+    private JSpinner spnDepTime;
+    private JSpinner spnArrTime;
+    private JTextField txtSeats;
     private JComboBox<String> cmbStatus;
 
     public FlightDialog(Frame parent, Flight flight) {
         super(parent, flight == null ? "Thêm chuyến bay mới" : "Sửa chuyến bay", true);
         this.flight = flight;
-        setSize(560, 600);
+        setSize(600, 580);
         setLocationRelativeTo(parent);
         setResizable(false);
         initUI();
@@ -54,58 +72,101 @@ public class FlightDialog extends JDialog {
         form.setBorder(new EmptyBorder(20, 30, 10, 30));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 4, 5, 4);
+        gbc.insets = new Insets(4, 4, 4, 4);
+
+        List<Airline> airlines = loadAirlines();
+        List<Airport> airports = loadAirports();
 
         int row = 0;
 
-        // Row 1: Mã chuyến bay + Hãng bay
-        row = addRowTwoFields(form, gbc, row,
-                "Mã chuyến bay *", "Hãng bay *",
-                txtCode = createField("VN001"), txtAirline = createField("Vietnam Airlines"));
+        // Row: Hãng bay + Mã chuyến bay
+        gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 0.5;
+        gbc.gridx = 0; form.add(makeLabel("Hãng bay *"), gbc);
+        gbc.gridx = 2; form.add(makeLabel("Mã chuyến bay (tự sinh)"), gbc);
+        row++;
 
-        // Row 2: Điểm đi + Điểm đến
-        row = addRowTwoFields(form, gbc, row,
-                "Điểm đi *", "Điểm đến *",
-                txtDeparture = createField("Hà Nội (HAN)"), txtArrival = createField("TP.HCM (SGN)"));
+        cmbAirline = new JComboBox<>(airlines.toArray(new Airline[0]));
+        styleCombo(cmbAirline);
+        txtCode = createField("");
+        txtCode.setEditable(false);
+        txtCode.setBackground(new Color(245, 245, 245));
 
-        // Row 3: Giờ bay + Giờ đến
-        row = addRowTwoFields(form, gbc, row,
-                "Giờ bay * (dd/MM/yyyy HH:mm)", "Giờ đến * (dd/MM/yyyy HH:mm)",
-                txtDepTime = createField("20/04/2026 07:00"), txtArrTime = createField("20/04/2026 09:00"));
+        gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 0.5;
+        gbc.gridx = 0; form.add(cmbAirline, gbc);
+        gbc.gridx = 2; form.add(txtCode, gbc);
+        row++;
 
-        // Row 4: Tổng ghế + Giá vé
-        row = addRowTwoFields(form, gbc, row,
-                "Tổng số ghế *", "Giá vé (VNĐ) *",
-                txtSeats = createField("150"), txtPrice = createField("1200000"));
+        // Row: Điểm đi + Điểm đến
+        gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 0.5;
+        gbc.gridx = 0; form.add(makeLabel("Điểm đi *"), gbc);
+        gbc.gridx = 2; form.add(makeLabel("Điểm đến *"), gbc);
+        row++;
 
-        // Row 5: Trạng thái (full width)
-        gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 1; gbc.weightx = 0;
-        JLabel lblStatus = new JLabel("Trạng thái");
-        lblStatus.setFont(UIConstants.NORMAL_FONT);
-        lblStatus.setForeground(new Color(60, 60, 60));
-        form.add(lblStatus, gbc);
+        cmbDeparture = new JComboBox<>(airports.toArray(new Airport[0]));
+        styleCombo(cmbDeparture);
+        cmbArrival = new JComboBox<>(airports.toArray(new Airport[0]));
+        styleCombo(cmbArrival);
 
-        gbc.gridx = 1; gbc.gridwidth = 3; gbc.weightx = 1;
-        FlightStatus[] allowedStatuses = flight == null
-                ? new FlightStatus[]{FlightStatus.SCHEDULED, FlightStatus.DELAYED}
-                : FlightStatus.values();
-        String[] statusNames = new String[allowedStatuses.length];
-        for (int i = 0; i < allowedStatuses.length; i++) statusNames[i] = allowedStatuses[i].getDisplayName();
-        cmbStatus = new JComboBox<>(statusNames);
-        cmbStatus.setFont(UIConstants.NORMAL_FONT);
-        cmbStatus.setPreferredSize(new Dimension(0, UIConstants.INPUT_HEIGHT));
-        form.add(cmbStatus, gbc);
+        gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 0.5;
+        gbc.gridx = 0; form.add(cmbDeparture, gbc);
+        gbc.gridx = 2; form.add(cmbArrival, gbc);
+        row++;
+
+        // Row: Giờ bay + Giờ đến
+        gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 0.5;
+        gbc.gridx = 0; form.add(makeLabel("Giờ bay *"), gbc);
+        gbc.gridx = 2; form.add(makeLabel("Giờ đến *"), gbc);
+        row++;
+
+        spnDepTime = createDateSpinner();
+        spnArrTime = createDateSpinner();
+
+        gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 0.5;
+        gbc.gridx = 0; form.add(spnDepTime, gbc);
+        gbc.gridx = 2; form.add(spnArrTime, gbc);
+        row++;
+
+        // Row: Tổng ghế
+        gbc.gridy = row; gbc.gridx = 0; gbc.gridwidth = 4; gbc.weightx = 1;
+        form.add(makeLabel("Tổng số ghế *"), gbc);
+        row++;
+
+        txtSeats = createField("150");
+        gbc.gridy = row; gbc.gridx = 0; gbc.gridwidth = 4;
+        form.add(txtSeats, gbc);
+        row++;
+
+        // Trạng thái chỉ hiện khi sửa
+        if (flight != null) {
+            gbc.gridy = row; gbc.gridx = 0; gbc.gridwidth = 4; gbc.weightx = 1;
+            form.add(makeLabel("Trạng thái"), gbc);
+            row++;
+
+            String[] statusNames = new String[FlightStatus.values().length];
+            for (int i = 0; i < FlightStatus.values().length; i++) statusNames[i] = FlightStatus.values()[i].getDisplayName();
+            cmbStatus = new JComboBox<>(statusNames);
+            cmbStatus.setFont(UIConstants.NORMAL_FONT);
+            cmbStatus.setPreferredSize(new Dimension(0, UIConstants.INPUT_HEIGHT));
+            gbc.gridy = row; gbc.gridx = 0; gbc.gridwidth = 4;
+            form.add(cmbStatus, gbc);
+        }
+
+        // Auto-generate code when airline changes (only for new flight)
+        if (flight == null) {
+            generateCode();
+            cmbAirline.addItemListener(e -> {
+                if (e.getStateChange() == ItemEvent.SELECTED) generateCode();
+            });
+        }
 
         // Buttons
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
         btnPanel.setBackground(Color.WHITE);
         btnPanel.setBorder(new MatteBorder(1, 0, 0, 0, new Color(230, 230, 230)));
-
         JButton btnCancel = makeBtn("Hủy", new Color(150, 150, 150));
         JButton btnSave   = makeBtn(flight == null ? "Thêm mới" : "Lưu thay đổi", UIConstants.PRIMARY_COLOR);
         btnCancel.addActionListener(e -> dispose());
         btnSave.addActionListener(e -> save());
-
         btnPanel.add(btnCancel);
         btnPanel.add(btnSave);
 
@@ -113,86 +174,100 @@ public class FlightDialog extends JDialog {
         main.add(new JScrollPane(form), BorderLayout.CENTER);
         main.add(btnPanel, BorderLayout.SOUTH);
         setContentPane(main);
-
         getRootPane().setDefaultButton(btnSave);
     }
 
-    /** Thêm 1 hàng gồm 2 label + 2 field song song */
-    private int addRowTwoFields(JPanel form, GridBagConstraints gbc, int row,
-                                String lbl1, String lbl2, JTextField f1, JTextField f2) {
-        // Labels
-        gbc.gridy = row; gbc.gridwidth = 1; gbc.weightx = 0;
-        gbc.gridx = 0;
-        form.add(makeLabel(lbl1), gbc);
-        gbc.gridx = 2;
-        form.add(makeLabel(lbl2), gbc);
-
-        // Fields
-        row++;
-        gbc.gridy = row; gbc.weightx = 1;
-        gbc.gridx = 0; gbc.gridwidth = 2;
-        form.add(f1, gbc);
-        gbc.gridx = 2;
-        form.add(f2, gbc);
-
-        return row + 1;
+    private void generateCode() {
+        Airline selected = (Airline) cmbAirline.getSelectedItem();
+        if (selected == null) return;
+        try {
+            txtCode.setText(flightDAO.generateNextCode(selected.getCode()));
+        } catch (SQLException e) {
+            txtCode.setText(selected.getCode() + "001");
+        }
     }
 
-    private JLabel makeLabel(String text) {
-        JLabel lbl = new JLabel(text);
-        lbl.setFont(UIConstants.SMALL_FONT);
-        lbl.setForeground(new Color(80, 80, 80));
-        return lbl;
+    private List<Airline> loadAirlines() {
+        try { return airlineDAO.findAll(); } catch (SQLException e) { return new ArrayList<>(); }
     }
 
-    private JTextField createField(String placeholder) {
-        JTextField tf = new JTextField();
+    private List<Airport> loadAirports() {
+        try { return airportDAO.findAll(); } catch (SQLException e) { return new ArrayList<>(); }
+    }
+
+    private JSpinner createDateSpinner() {
+        SpinnerDateModel model = new SpinnerDateModel(new Date(), null, null, Calendar.MINUTE);
+        JSpinner spinner = new JSpinner(model);
+        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "dd/MM/yyyy HH:mm");
+        spinner.setEditor(editor);
+        spinner.setFont(UIConstants.NORMAL_FONT);
+        spinner.setPreferredSize(new Dimension(0, UIConstants.INPUT_HEIGHT));
+        JTextComponent tf = ((JSpinner.DefaultEditor) editor).getTextField();
         tf.setFont(UIConstants.NORMAL_FONT);
-        tf.setPreferredSize(new Dimension(0, UIConstants.INPUT_HEIGHT));
-        tf.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200)),
-                BorderFactory.createEmptyBorder(4, 8, 4, 8)));
-        tf.setToolTipText(placeholder);
-        return tf;
+        return spinner;
+    }
+
+    private <T> void styleCombo(JComboBox<T> combo) {
+        combo.setFont(UIConstants.NORMAL_FONT);
+        combo.setPreferredSize(new Dimension(0, UIConstants.INPUT_HEIGHT));
     }
 
     private void fillData() {
+        // Airline: match by name
+        for (int i = 0; i < cmbAirline.getItemCount(); i++) {
+            if (cmbAirline.getItemAt(i).getName().equalsIgnoreCase(flight.getAirline())) {
+                cmbAirline.setSelectedIndex(i);
+                break;
+            }
+        }
+
+        // Code editable when editing
         txtCode.setText(flight.getFlightCode());
-        txtAirline.setText(flight.getAirline());
-        txtDeparture.setText(flight.getDepartureAirport());
-        txtArrival.setText(flight.getArrivalAirport());
-        if (flight.getDepartureTime() != null) txtDepTime.setText(flight.getDepartureTime().format(DTF));
-        if (flight.getArrivalTime() != null)   txtArrTime.setText(flight.getArrivalTime().format(DTF));
+        txtCode.setEditable(true);
+        txtCode.setBackground(Color.WHITE);
+
+        // Airports: stored as "City (CODE)"
+        selectAirport(cmbDeparture, flight.getDepartureAirport());
+        selectAirport(cmbArrival, flight.getArrivalAirport());
+
+        // Times
+        if (flight.getDepartureTime() != null) {
+            spnDepTime.setValue(Date.from(flight.getDepartureTime().atZone(ZoneId.systemDefault()).toInstant()));
+        }
+        if (flight.getArrivalTime() != null) {
+            spnArrTime.setValue(Date.from(flight.getArrivalTime().atZone(ZoneId.systemDefault()).toInstant()));
+        }
+
         txtSeats.setText(String.valueOf(flight.getTotalSeats()));
-        if (flight.getPrice() != null) txtPrice.setText(flight.getPrice().toPlainString());
         if (flight.getStatus() != null) cmbStatus.setSelectedItem(flight.getStatus().getDisplayName());
     }
 
-    private void save() {
-        String code      = txtCode.getText().trim();
-        String airline   = txtAirline.getText().trim();
-        String dep       = txtDeparture.getText().trim();
-        String arr       = txtArrival.getText().trim();
-        String depTimeStr = txtDepTime.getText().trim();
-        String arrTimeStr = txtArrTime.getText().trim();
-        String seatsStr  = txtSeats.getText().trim();
-        String priceStr  = txtPrice.getText().trim();
+    private void selectAirport(JComboBox<Airport> cmb, String stored) {
+        if (stored == null) return;
+        for (int i = 0; i < cmb.getItemCount(); i++) {
+            Airport ap = cmb.getItemAt(i);
+            String fmt = ap.getCity() + " (" + ap.getCode() + ")";
+            if (fmt.equalsIgnoreCase(stored) || ap.getCode().equalsIgnoreCase(stored)) {
+                cmb.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
 
-        if (code.isEmpty() || airline.isEmpty() || dep.isEmpty() || arr.isEmpty()
-                || depTimeStr.isEmpty() || arrTimeStr.isEmpty()
-                || seatsStr.isEmpty() || priceStr.isEmpty()) {
+    private void save() {
+        String code   = txtCode.getText().trim();
+        Airline airline = (Airline) cmbAirline.getSelectedItem();
+        Airport dep   = (Airport) cmbDeparture.getSelectedItem();
+        Airport arr   = (Airport) cmbArrival.getSelectedItem();
+        String seatsStr = txtSeats.getText().trim();
+
+        if (code.isEmpty() || airline == null || dep == null || arr == null || seatsStr.isEmpty()) {
             showError("Vui lòng điền đầy đủ thông tin bắt buộc (*)");
             return;
         }
 
-        LocalDateTime depTime, arrTime;
-        try {
-            depTime = LocalDateTime.parse(depTimeStr, DTF);
-            arrTime = LocalDateTime.parse(arrTimeStr, DTF);
-        } catch (DateTimeParseException e) {
-            showError("Định dạng thời gian không hợp lệ!\nVui lòng dùng: dd/MM/yyyy HH:mm\nVí dụ: 20/04/2026 07:00");
-            return;
-        }
+        LocalDateTime depTime = ((Date) spnDepTime.getValue()).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        LocalDateTime arrTime = ((Date) spnArrTime.getValue()).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 
         if (!depTime.isBefore(arrTime)) {
             showError("Giờ bay phải trước giờ đến!");
@@ -200,7 +275,6 @@ public class FlightDialog extends JDialog {
         }
 
         int seats;
-        BigDecimal price;
         try {
             seats = Integer.parseInt(seatsStr);
             if (seats <= 0) throw new NumberFormatException();
@@ -208,30 +282,25 @@ public class FlightDialog extends JDialog {
             showError("Số ghế phải là số nguyên dương!");
             return;
         }
-        try {
-            price = new BigDecimal(priceStr.replace(",", "").replace(".", ""));
-            if (price.compareTo(BigDecimal.ZERO) <= 0) throw new NumberFormatException();
-        } catch (NumberFormatException e) {
-            showError("Giá vé phải là số dương!");
-            return;
-        }
 
         FlightStatus status = FlightStatus.SCHEDULED;
-        String sel = (String) cmbStatus.getSelectedItem();
-        for (FlightStatus s : FlightStatus.values()) {
-            if (s.getDisplayName().equals(sel)) { status = s; break; }
+        if (cmbStatus != null) {
+            String sel = (String) cmbStatus.getSelectedItem();
+            for (FlightStatus s : FlightStatus.values()) {
+                if (s.getDisplayName().equals(sel)) { status = s; break; }
+            }
         }
 
         Flight f = flight != null ? flight : new Flight();
         f.setFlightCode(code);
-        f.setAirline(airline);
-        f.setDepartureAirport(dep);
-        f.setArrivalAirport(arr);
+        f.setAirline(airline.getName());
+        f.setDepartureAirport(dep.getCity() + " (" + dep.getCode() + ")");
+        f.setArrivalAirport(arr.getCity() + " (" + arr.getCode() + ")");
         f.setDepartureTime(depTime);
         f.setArrivalTime(arrTime);
         f.setTotalSeats(seats);
         if (f.getAvailableSeats() == null) f.setAvailableSeats(seats);
-        f.setPrice(price);
+        f.setPrice(BigDecimal.ZERO);
         f.setStatus(status);
 
         try {
@@ -247,6 +316,24 @@ public class FlightDialog extends JDialog {
         } catch (Exception e) {
             showError("Lỗi: " + e.getMessage());
         }
+    }
+
+    private JLabel makeLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(UIConstants.SMALL_FONT);
+        lbl.setForeground(new Color(80, 80, 80));
+        return lbl;
+    }
+
+    private JTextField createField(String tooltip) {
+        JTextField tf = new JTextField();
+        tf.setFont(UIConstants.NORMAL_FONT);
+        tf.setPreferredSize(new Dimension(0, UIConstants.INPUT_HEIGHT));
+        tf.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8)));
+        tf.setToolTipText(tooltip);
+        return tf;
     }
 
     private void showError(String msg) {

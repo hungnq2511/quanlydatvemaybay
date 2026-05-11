@@ -82,7 +82,7 @@ public class FlightPanel extends JPanel {
 
         // Table
         String[] columns = {"ID", "Mã CB", "Hãng bay", "Điểm đi", "Điểm đến",
-                "Giờ bay", "Giờ đến", "Tổng ghế", "Còn trống", "Giá (VNĐ)", "Trạng thái"};
+                "Giờ bay", "Giờ đến", "Tổng ghế", "Còn trống", "Trạng thái"};
         tableModel = new DefaultTableModel(columns, 0) {
             public boolean isCellEditable(int row, int col) { return false; }
         };
@@ -143,7 +143,7 @@ public class FlightPanel extends JPanel {
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setSelectionBackground(new Color(210, 230, 255));
 
-        int[] widths = {50, 90, 120, 130, 130, 130, 130, 80, 80, 110, 110};
+        int[] widths = {50, 90, 130, 150, 150, 130, 130, 80, 80, 110};
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -194,7 +194,6 @@ public class FlightPanel extends JPanel {
                                 f.getArrivalTime() != null ? f.getArrivalTime().format(DTF) : "",
                                 f.getTotalSeats(),
                                 f.getAvailableSeats(),
-                                String.format("%,.0f", f.getPrice()),
                                 f.getStatus() != null ? f.getStatus().getDisplayName() : ""
                         });
                     }

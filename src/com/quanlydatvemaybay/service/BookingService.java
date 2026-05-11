@@ -22,6 +22,7 @@ public class BookingService {
     private final BookingDAO bookingDAO = new BookingDAO();
     private final TicketDAO ticketDAO = new TicketDAO();
     private final FlightDAO flightDAO = new FlightDAO();
+    private final EmailService emailService = new EmailService();
 
     public List<Booking> getAll() throws SQLException {
         User currentUser = AuthService.getCurrentUser();
@@ -87,7 +88,9 @@ if (currentUser != null && !currentUser.isAdmin()) {
         if (newAvailable < 0) newAvailable = 0;
         flightDAO.updateAvailableSeats(flight.getId(), newAvailable);
 
-        return bookingDAO.findById(booking.getId()).orElse(booking);
+        Booking saved = bookingDAO.findById(booking.getId()).orElse(booking);
+        emailService.sendBookingConfirmation(saved);
+        return saved;
     }
 
     public Booking update(Long id, String passengerName, String passengerEmail,

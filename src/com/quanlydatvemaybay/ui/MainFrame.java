@@ -2,6 +2,8 @@ package com.quanlydatvemaybay.ui;
 
 import com.quanlydatvemaybay.entity.User;
 import com.quanlydatvemaybay.service.AuthService;
+import com.quanlydatvemaybay.ui.panels.AirlinePanel;
+import com.quanlydatvemaybay.ui.panels.AirportPanel;
 import com.quanlydatvemaybay.ui.panels.BookingPanel;
 import com.quanlydatvemaybay.ui.panels.DashboardPanel;
 import com.quanlydatvemaybay.ui.panels.FlightPanel;
@@ -24,6 +26,8 @@ public class MainFrame extends JFrame {
     private FlightPanel flightPanel;
     private BookingPanel bookingPanel;
     private UserPanel userPanel;
+    private AirlinePanel airlinePanel;
+    private AirportPanel airportPanel;
 
     public MainFrame() {
         setTitle("Quản Lý Đặt Vé Máy Bay");
@@ -46,19 +50,23 @@ public class MainFrame extends JFrame {
         contentPanel = new JPanel(cardLayout);
         contentPanel.setBackground(UIConstants.BG_COLOR);
         dashboardPanel = new DashboardPanel();
-        flightPanel = new FlightPanel();
-        ticketPanel = new TicketPanel();
-        bookingPanel = new BookingPanel();
-        userPanel = new UserPanel();
+        flightPanel    = new FlightPanel();
+        ticketPanel    = new TicketPanel();
+        bookingPanel   = new BookingPanel();
+        userPanel      = new UserPanel();
+        airlinePanel   = new AirlinePanel();
+        airportPanel   = new AirportPanel();
 
         User currentUser = AuthService.getCurrentUser();
         boolean isAdmin = currentUser != null && currentUser.isAdmin();
 
         if (isAdmin) {
             contentPanel.add(dashboardPanel, "dashboard");
-            contentPanel.add(flightPanel, "flights");
-            contentPanel.add(ticketPanel, "tickets");
-            contentPanel.add(userPanel, "users");
+            contentPanel.add(flightPanel,    "flights");
+            contentPanel.add(ticketPanel,    "tickets");
+            contentPanel.add(userPanel,      "users");
+            contentPanel.add(airlinePanel,   "airlines");
+            contentPanel.add(airportPanel,   "airports");
         }
         contentPanel.add(bookingPanel, "bookings");
 
@@ -102,11 +110,13 @@ public class MainFrame extends JFrame {
         boolean isAdmin = user != null && user.isAdmin();
 
         if (isAdmin) {
-            addNavItem(navPanel, "  Tổng quan", "dashboard");
-            addNavItem(navPanel, "  Chuyến bay", "flights");
-            addNavItem(navPanel, "  Vé máy bay", "tickets");
-            addNavItem(navPanel, "  Đặt vé", "bookings");
-            addNavItem(navPanel, "  Người dùng", "users");
+            addNavItem(navPanel, "  Tổng quan",   "dashboard");
+            addNavItem(navPanel, "  Chuyến bay",  "flights");
+            addNavItem(navPanel, "  Vé máy bay",  "tickets");
+            addNavItem(navPanel, "  Đặt vé",      "bookings");
+            addNavItem(navPanel, "  Hãng bay",    "airlines");
+            addNavItem(navPanel, "  Địa điểm",    "airports");
+            addNavItem(navPanel, "  Người dùng",  "users");
         } else {
             addNavItem(navPanel, "  Đặt vé", "bookings");
         }
@@ -185,6 +195,8 @@ public class MainFrame extends JFrame {
         else if ("flights".equals(name)) flightPanel.refresh();
         else if ("tickets".equals(name)) ticketPanel.refresh();
         else if ("bookings".equals(name)) bookingPanel.refresh();
-        else if ("users".equals(name)) userPanel.refresh();
+        else if ("users".equals(name))    userPanel.refresh();
+        else if ("airlines".equals(name)) airlinePanel.refresh();
+        else if ("airports".equals(name)) airportPanel.refresh();
     }
 }

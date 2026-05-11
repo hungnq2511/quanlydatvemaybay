@@ -3,6 +3,7 @@ package com.quanlydatvemaybay.ui.panels;
 import com.quanlydatvemaybay.entity.Booking;
 import com.quanlydatvemaybay.entity.Flight;
 import com.quanlydatvemaybay.enums.BookingStatus;
+import com.quanlydatvemaybay.enums.FlightStatus;
 import com.quanlydatvemaybay.service.AuthService;
 import com.quanlydatvemaybay.service.BookingService;
 import com.quanlydatvemaybay.service.FlightService;
@@ -190,7 +191,11 @@ public class BookingPanel extends JPanel {
 
     private void loadFlights() {
         try {
-            flightList = flightService.getAll();
+            flightList = flightService.getAll().stream()
+                    .filter(f -> f.getStatus() == FlightStatus.SCHEDULED)
+                    .collect(java.util.stream.Collectors.toList());
+            cmbFlight.removeAllItems();
+            cmbFlight.addItem("-- Tất cả --");
             for (Flight f : flightList) {
                 cmbFlight.addItem(f.getFlightCode() + " - " + f.getDepartureAirport() + "→" + f.getArrivalAirport());
             }

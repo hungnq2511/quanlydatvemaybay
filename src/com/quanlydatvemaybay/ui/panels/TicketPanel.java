@@ -68,7 +68,6 @@ public class TicketPanel extends JPanel {
 
         JButton btnSearch = createButton("Lọc", UIConstants.PRIMARY_COLOR);
         JButton btnRefresh = createButton("Làm mới", new Color(100, 100, 100));
-        JButton btnAdd = createButton("+ Thêm vé", UIConstants.SECONDARY_COLOR);
         JButton btnBulk = createButton("Thêm hàng loạt", new Color(142, 68, 173));
 
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
@@ -82,7 +81,6 @@ public class TicketPanel extends JPanel {
 
         JPanel addPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
         addPanel.setBackground(Color.WHITE);
-        addPanel.add(btnAdd);
         addPanel.add(btnBulk);
 
         toolbar.add(searchPanel, BorderLayout.WEST);
@@ -109,7 +107,6 @@ public class TicketPanel extends JPanel {
 
         btnSearch.addActionListener(e -> performSearch());
         btnRefresh.addActionListener(e -> { cmbFlight.setSelectedIndex(0); cmbStatus.setSelectedIndex(0); loadData(null, null); });
-        btnAdd.addActionListener(e -> openAddDialog());
         btnBulk.addActionListener(e -> openBulkDialog());
 
         table.addMouseListener(new MouseAdapter() {
@@ -174,6 +171,8 @@ public class TicketPanel extends JPanel {
     private void loadFlights() {
         try {
             flightList = flightService.getAll();
+            cmbFlight.removeAllItems();
+            cmbFlight.addItem("-- Tất cả --");
             for (Flight f : flightList) {
                 cmbFlight.addItem(f.getFlightCode() + " - " + f.getDepartureAirport() + "→" + f.getArrivalAirport());
             }
@@ -244,10 +243,19 @@ public class TicketPanel extends JPanel {
     }
 
     private void openBulkDialog() {
-        TicketDialog dialog = new TicketDialog((Frame) SwingUtilities.getWindowAncestor(this), null, flightList);
+        loadFlights();
+        List<Flight> scheduledFlights = flightList.stream()
+                .filter(f -> f.getStatus() == com.quanlydatvemaybay.enums.FlightStatus.SCHEDULED)
+                .collect(java.util.stream.Collectors.toList());
+        if (scheduledFlights.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Không có chuyến bay nào đang ở trạng thái 'Đã lên lịch'!",
+                    "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        TicketDialog dialog = new TicketDialog((Frame) SwingUtilities.getWindowAncestor(this), null, scheduledFlights);
         dialog.setBulkMode(true);
         dialog.setVisible(true);
-        if (dialog.isConfirmed()) loadData(null, null);
+        if (dialog.isConfirmed()) { loadFlights(); loadData(null, null); }
     }
 
     private void openEditDialog() {
