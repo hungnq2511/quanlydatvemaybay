@@ -126,9 +126,9 @@ public class UserSearchPanel extends JPanel {
         lblSummary.setBackground(Color.WHITE);
 
         // Result table
-        String[] cols = {"ID", "Mã CB", "Hãng", "Điểm đi", "Điểm đến", "Khởi hành", "Đến nơi", "Ghế trống", "Giá (VNĐ)", ""};
+        String[] cols = {"ID", "Mã CB", "Hãng", "Điểm đi", "Điểm đến", "Khởi hành", "Đến nơi", "Ghế trống", ""};
         resultModel = new DefaultTableModel(cols, 0) {
-            public boolean isCellEditable(int r, int c) { return c == 9; }
+            public boolean isCellEditable(int r, int c) { return c == 8; }
         };
         resultTable = new JTable(resultModel);
         resultTable.setFont(UIConstants.NORMAL_FONT);
@@ -137,7 +137,7 @@ public class UserSearchPanel extends JPanel {
         UIConstants.applyTableHeaderStyle(resultTable);
         resultTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        int[] widths = {40, 80, 140, 160, 160, 130, 130, 90, 120, 110};
+        int[] widths = {40, 80, 140, 180, 180, 140, 140, 100, 120};
         for (int i = 0; i < widths.length; i++) {
             resultTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -147,8 +147,8 @@ public class UserSearchPanel extends JPanel {
         resultTable.getColumnModel().getColumn(0).setWidth(0);
 
         // Cột "Đặt vé" – button
-        resultTable.getColumnModel().getColumn(9).setCellRenderer(new ButtonRenderer());
-        resultTable.getColumnModel().getColumn(9).setCellEditor(new ButtonEditor(new JCheckBox()));
+        resultTable.getColumnModel().getColumn(8).setCellRenderer(new ButtonRenderer());
+        resultTable.getColumnModel().getColumn(8).setCellEditor(new ButtonEditor(new JCheckBox()));
 
         // Alternating rows
         resultTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
@@ -277,7 +277,6 @@ public class UserSearchPanel extends JPanel {
                     f.getDepartureTime() != null ? f.getDepartureTime().format(DTF) : "",
                     f.getArrivalTime() != null ? f.getArrivalTime().format(DTF) : "",
                     f.getAvailableSeats(),
-                    f.getPrice() != null ? String.format("%,.0f", f.getPrice()) : "",
                     "Đặt vé"
             });
         }
