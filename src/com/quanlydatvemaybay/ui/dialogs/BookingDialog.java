@@ -34,21 +34,31 @@ public class BookingDialog extends JDialog {
             java.util.regex.Pattern.compile("^([0-9]{9,12}|[A-Z]{1,2}[0-9]{7,8})$");
 
     private JComboBox<String> cmbFlight;
-    private JComboBox<String> cmbTicket;
+    private SeatMapPanel seatMap;
     private JLabel lblFlightInfo;
     private JTextField txtName, txtEmail, txtPhone, txtIdCard;
     private JComboBox<String> cmbStatus;
     private List<Flight> flightList = new ArrayList<>();
     private List<Ticket> ticketList = new ArrayList<>();
+    private Long preselectedFlightId;
 
     public BookingDialog(Frame parent, Booking booking) {
+        this(parent, booking, null);
+    }
+
+    /**
+     * Mở dialog đặt vé và chọn sẵn 1 chuyến bay (vd: từ Smart Search).
+     */
+    public BookingDialog(Frame parent, Booking booking, Long preselectedFlightId) {
         super(parent, booking == null ? "Đặt vé mới" : "Sửa đặt vé", true);
         this.booking = booking;
-        setSize(520, booking == null ? 580 : 460);
+        this.preselectedFlightId = preselectedFlightId;
+        setSize(720, booking == null ? 720 : 460);
         setLocationRelativeTo(parent);
-        setResizable(false);
+        setResizable(true);
         initUI();
         if (booking != null) fillData();
+        if (booking == null && preselectedFlightId != null) selectPreselectedFlight();
     }
 
     private void initUI() {
@@ -94,13 +104,21 @@ public class BookingDialog extends JDialog {
             gbc.gridwidth = 1;
             row++;
 
-            // --- Chọn vé ---
-            row = addLabel(form, gbc, row, "Vé / Ghế ngồi *");
-            gbc.gridx = 1; gbc.gridy = row - 1; gbc.weightx = 1;
-            cmbTicket = new JComboBox<>();
-            cmbTicket.setFont(UIConstants.NORMAL_FONT);
-            cmbTicket.setPreferredSize(new Dimension(340, UIConstants.INPUT_HEIGHT));
-            form.add(cmbTicket, gbc);
+            // --- Sơ đồ chọn ghế (thay JComboBox) ---
+            gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 1;
+            JLabel lblSeat = new JLabel("Chọn ghế ngồi *");
+            lblSeat.setFont(UIConstants.NORMAL_FONT);
+            lblSeat.setForeground(new Color(60, 60, 60));
+            form.add(lblSeat, gbc);
+            row++;
+
+            gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2;
+            gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 1;
+            seatMap = new SeatMapPanel();
+            seatMap.setPreferredSize(new Dimension(640, 260));
+            form.add(seatMap, gbc);
+            gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weighty = 0; gbc.gridwidth = 1;
+            row++;
 
             // Separator
             gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2;
@@ -206,15 +224,13 @@ public class BookingDialog extends JDialog {
     }
 
     private void onFlightSelected() {
-        cmbTicket.removeAllItems();
         ticketList.clear();
         lblFlightInfo.setText(" ");
+        if (seatMap != null) seatMap.setTickets(java.util.Collections.emptyList());
 
         int idx = cmbFlight.getSelectedIndex();
-        // idx 0 = "-- Chọn chuyến bay --", idx 1+ = flight (nhưng danh sách flight đã lọc)
         if (idx <= 0) return;
 
-        // Tìm flight tương ứng — cần map lại vì đã bỏ các flight bị hủy
         String selected = (String) cmbFlight.getSelectedItem();
         if (selected == null) return;
         String code = selected.split("\\|")[0].trim();
@@ -227,18 +243,22 @@ public class BookingDialog extends JDialog {
         lblFlightInfo.setText("Ghế còn trống: " + flight.getAvailableSeats());
 
         try {
-            ticketList = ticketService.search(flight.getId(), TicketStatus.AVAILABLE);
-            if (ticketList.isEmpty()) {
-                cmbTicket.addItem("-- Không còn vé trống --");
-            } else {
-                for (Ticket t : ticketList) {
-                    cmbTicket.addItem("Ghế " + t.getSeatNumber()
-                            + "  [" + (t.getTicketClass() != null ? t.getTicketClass().getDisplayName() : "") + "]"
-                            + "  -  " + String.format("%,.0f VNĐ", t.getPrice()));
-                }
-            }
+            // Load TẤT CẢ ticket của chuyến bay (cả AVAILABLE và BOOKED)
+            // để sơ đồ ghế hiển thị đầy đủ tình trạng.
+            ticketList = ticketService.search(flight.getId(), null);
+            if (seatMap != null) seatMap.setTickets(ticketList);
         } catch (Exception e) {
-            cmbTicket.addItem("Lỗi tải danh sách vé");
+            lblFlightInfo.setText("Lỗi tải sơ đồ ghế: " + e.getMessage());
+        }
+    }
+
+    private void selectPreselectedFlight() {
+        if (cmbFlight == null) return;
+        for (int i = 0; i < flightList.size(); i++) {
+            if (flightList.get(i).getId().equals(preselectedFlightId)) {
+                cmbFlight.setSelectedIndex(i + 1); // +1 vì idx 0 là placeholder
+                return;
+            }
         }
     }
 
@@ -335,12 +355,12 @@ public class BookingDialog extends JDialog {
                     JOptionPane.showMessageDialog(this, "Không có vé trống cho chuyến bay này!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                int ticketIdx = cmbTicket.getSelectedIndex();
-                if (ticketIdx < 0 || ticketIdx >= ticketList.size()) {
-                    JOptionPane.showMessageDialog(this, "Vui lòng chọn ghế!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                Ticket picked = seatMap != null ? seatMap.getSelectedTicket() : null;
+                if (picked == null) {
+                    JOptionPane.showMessageDialog(this, "Vui lòng chọn ghế trên sơ đồ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                Long ticketId = ticketList.get(ticketIdx).getId();
+                Long ticketId = picked.getId();
                 bookingService.create(ticketId, name, email,
                         phone.isEmpty() ? null : phone,
                         idCard.isEmpty() ? null : idCard);

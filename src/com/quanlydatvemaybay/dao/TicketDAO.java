@@ -174,6 +174,38 @@ public class TicketDAO {
         return false;
     }
 
+    // ======= TRANSACTION-AWARE OVERLOADS =======
+
+    public Optional<Ticket> findByIdForUpdate(Connection conn, Long id) throws SQLException {
+        // Oracle: subquery với JOIN không hỗ trợ FOR UPDATE trực tiếp,
+        // nên khóa bản ghi TICKET trước, sau đó join thông tin flight.
+        String lockSql = "SELECT ID FROM TICKET WHERE ID=? FOR UPDATE";
+        try (PreparedStatement ps = conn.prepareStatement(lockSql)) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+            }
+        }
+        String sql = "SELECT T.*, F.FLIGHT_CODE FROM TICKET T JOIN FLIGHT F ON T.FLIGHT_ID = F.ID WHERE T.ID=?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return Optional.of(mapRow(rs));
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void updateStatus(Connection conn, Long id, TicketStatus status) throws SQLException {
+        String sql = "UPDATE TICKET SET STATUS=?, UPDATED_DATE=? WHERE ID=?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, status.name());
+            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setLong(3, id);
+            ps.executeUpdate();
+        }
+    }
+
     public boolean hasBooking(Long ticketId) throws SQLException {
         String sql = "SELECT COUNT(*) FROM BOOKING WHERE TICKET_ID=?";
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {

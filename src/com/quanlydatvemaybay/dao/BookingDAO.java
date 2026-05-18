@@ -186,6 +186,52 @@ public class BookingDAO {
         }
     }
 
+    // ======= TRANSACTION-AWARE OVERLOADS =======
+
+    public Booking save(Connection conn, Booking b) throws SQLException {
+        String sql = "INSERT INTO BOOKING (BOOKING_CODE, TICKET_ID, PASSENGER_NAME, PASSENGER_EMAIL, " +
+                "PASSENGER_PHONE, PASSENGER_ID_CARD, BOOKING_DATE, STATUS, CREATED_DATE, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql, new String[]{"ID"})) {
+            ps.setString(1, b.getBookingCode());
+            ps.setLong(2, b.getTicketId());
+            ps.setString(3, b.getPassengerName());
+            ps.setString(4, b.getPassengerEmail());
+            ps.setString(5, b.getPassengerPhone());
+            ps.setString(6, b.getPassengerIdCard());
+            ps.setTimestamp(7, Timestamp.valueOf(b.getBookingDate() != null ? b.getBookingDate() : LocalDateTime.now()));
+            ps.setString(8, b.getStatus() != null ? b.getStatus().name() : BookingStatus.PENDING.name());
+            ps.setTimestamp(9, Timestamp.valueOf(LocalDateTime.now()));
+            if (b.getCreatedBy() != null) ps.setLong(10, b.getCreatedBy());
+            else ps.setNull(10, java.sql.Types.NUMERIC);
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) b.setId(rs.getLong(1));
+            }
+        }
+        return b;
+    }
+
+    public void updateStatus(Connection conn, Long id, BookingStatus status) throws SQLException {
+        String sql = "UPDATE BOOKING SET STATUS=?, UPDATED_DATE=? WHERE ID=?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, status.name());
+            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setLong(3, id);
+            ps.executeUpdate();
+        }
+    }
+
+    public boolean existsByCode(Connection conn, String code) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM BOOKING WHERE BOOKING_CODE=?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, code);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        }
+        return false;
+    }
+
     public boolean existsByCode(String code) throws SQLException {
         String sql = "SELECT COUNT(*) FROM BOOKING WHERE BOOKING_CODE=?";
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {

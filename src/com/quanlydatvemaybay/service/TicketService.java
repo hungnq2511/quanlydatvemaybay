@@ -88,6 +88,14 @@ public class TicketService {
             ticket.setStatus(TicketStatus.AVAILABLE);
             result.add(ticketDAO.save(ticket));
         }
+
+        // FIX #6: cộng dồn availableSeats của FLIGHT theo số vé thực sự được tạo,
+        // không vượt quá totalSeats.
+        if (!result.isEmpty()) {
+            int newAvailable = flight.getAvailableSeats() + result.size();
+            if (newAvailable > flight.getTotalSeats()) newAvailable = flight.getTotalSeats();
+            flightDAO.updateAvailableSeats(flight.getId(), newAvailable);
+        }
         return result;
     }
 
