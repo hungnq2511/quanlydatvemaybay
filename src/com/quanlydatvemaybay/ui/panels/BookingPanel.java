@@ -261,8 +261,19 @@ public class BookingPanel extends JPanel {
         }
         Long id = (Long) tableModel.getValueAt(row, 0);
         try {
-            return bookingService.getById(id).orElse(null);
-        } catch (Exception e) { return null; }
+            Booking b = bookingService.getById(id).orElse(null);
+            if (b == null) {
+                JOptionPane.showMessageDialog(this,
+                        "Không tìm thấy đặt vé hoặc bạn không có quyền truy cập.",
+                        "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+            return b;
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Lỗi tải đặt vé: " + e.getMessage(),
+                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
     }
 
     private void openAddDialog() {
@@ -312,6 +323,28 @@ public class BookingPanel extends JPanel {
     private void cancelSelected() {
         Booking booking = getSelectedBooking();
         if (booking == null) return;
+
+        // Pre-check để báo lỗi rõ ràng trước khi gọi service
+        if (booking.getStatus() == com.quanlydatvemaybay.enums.BookingStatus.CANCELLED) {
+            JOptionPane.showMessageDialog(this,
+                    "Đặt vé " + booking.getBookingCode() + " đã ở trạng thái \"Đã hủy\".",
+                    "Không thể hủy", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (booking.getStatus() == com.quanlydatvemaybay.enums.BookingStatus.COMPLETED) {
+            JOptionPane.showMessageDialog(this,
+                    "Vé đã hoàn thành chuyến bay, không thể hủy.",
+                    "Không thể hủy", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (booking.getDepartureTime() != null
+                && booking.getDepartureTime().isBefore(java.time.LocalDateTime.now())) {
+            JOptionPane.showMessageDialog(this,
+                    "Chuyến bay đã khởi hành, không thể hủy vé.",
+                    "Không thể hủy", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Hủy đặt vé " + booking.getBookingCode() + " của " + booking.getPassengerName() + "?",
                 "Xác nhận hủy vé", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
@@ -321,6 +354,7 @@ public class BookingPanel extends JPanel {
                 loadData(null, null, null);
                 JOptionPane.showMessageDialog(this, "Hủy vé thành công!");
             } catch (Exception e) {
+                e.printStackTrace();
                 JOptionPane.showMessageDialog(this, "Lỗi: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         }

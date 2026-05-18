@@ -188,6 +188,17 @@ public class BookingDAO {
 
     // ======= TRANSACTION-AWARE OVERLOADS =======
 
+    public Optional<Booking> findById(Connection conn, Long id) throws SQLException {
+        String sql = BASE_SELECT + " WHERE B.ID=?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return Optional.of(mapRow(rs));
+            }
+        }
+        return Optional.empty();
+    }
+
     public Booking save(Connection conn, Booking b) throws SQLException {
         String sql = "INSERT INTO BOOKING (BOOKING_CODE, TICKET_ID, PASSENGER_NAME, PASSENGER_EMAIL, " +
                 "PASSENGER_PHONE, PASSENGER_ID_CARD, BOOKING_DATE, STATUS, CREATED_DATE, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
