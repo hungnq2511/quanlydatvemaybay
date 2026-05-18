@@ -246,6 +246,66 @@ public class BookingDAO {
         return false;
     }
 
+    /**
+     * Lấy các booking PENDING có chuyến bay đã khởi hành — để auto-cancel
+     * khi user load danh sách.
+     */
+    public List<Booking> findPendingBeforeDeparture(java.time.LocalDateTime now) throws SQLException {
+        List<Booking> list = new ArrayList<>();
+        String sql = BASE_SELECT + " WHERE B.STATUS='PENDING' AND F.DEPARTURE_TIME < ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.valueOf(now));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Lấy các booking CONFIRMED của chuyến bay đã có ARRIVAL_TIME < now
+     * — để auto chuyển sang COMPLETED.
+     */
+    public List<Booking> findConfirmedAfterArrival(java.time.LocalDateTime now) throws SQLException {
+        List<Booking> list = new ArrayList<>();
+        String sql = BASE_SELECT + " WHERE B.STATUS='CONFIRMED' AND F.ARRIVAL_TIME < ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.valueOf(now));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Lấy tất cả booking chưa CANCELLED/COMPLETED của 1 chuyến bay
+     * — để cascade khi admin hủy/đổi status chuyến bay.
+     */
+    public List<Booking> findActiveByFlightId(Long flightId) throws SQLException {
+        List<Booking> list = new ArrayList<>();
+        String sql = BASE_SELECT + " WHERE F.ID=? AND B.STATUS NOT IN ('CANCELLED','COMPLETED')";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setLong(1, flightId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        }
+        return list;
+    }
+
+    public List<Booking> findConfirmedByFlightId(Long flightId) throws SQLException {
+        List<Booking> list = new ArrayList<>();
+        String sql = BASE_SELECT + " WHERE F.ID=? AND B.STATUS='CONFIRMED'";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setLong(1, flightId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        }
+        return list;
+    }
+
     public boolean existsByCode(String code) throws SQLException {
         String sql = "SELECT COUNT(*) FROM BOOKING WHERE BOOKING_CODE=?";
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
