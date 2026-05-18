@@ -166,16 +166,34 @@ public class BookingService {
      * FIX #3: Hủy vé idempotent + transaction.
      *  - Chỉ hoàn ghế khi ticket đang BOOKED (tránh double-refund).
      *  - Khóa TICKET + FLIGHT để chặn race.
+     *  - User chỉ được hủy vé của chính mình.
+     *  - Không cho hủy nếu chuyến bay đã khởi hành.
      */
     public void cancel(Long id) throws SQLException {
+        User currentUser = AuthService.getCurrentUser();
         try (Connection conn = DatabaseConfig.getInstance().newConnection()) {
             conn.setAutoCommit(false);
             try {
-                Booking booking = bookingDAO.findById(id)
+                Booking booking = bookingDAO.findById(conn, id)
                         .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đặt vé ID=" + id));
+
+                // Permission: user chỉ được hủy booking của chính mình
+                if (currentUser != null && !currentUser.isAdmin()
+                        && !currentUser.getId().equals(booking.getCreatedBy())) {
+                    throw new IllegalArgumentException("Bạn không có quyền hủy đặt vé này!");
+                }
 
                 if (booking.getStatus() == BookingStatus.CANCELLED) {
                     throw new IllegalArgumentException("Đặt vé này đã được hủy trước đó!");
+                }
+                if (booking.getStatus() == BookingStatus.COMPLETED) {
+                    throw new IllegalArgumentException("Không thể hủy vé đã hoàn thành chuyến bay!");
+                }
+
+                // Không cho hủy nếu chuyến bay đã khởi hành
+                if (booking.getDepartureTime() != null
+                        && booking.getDepartureTime().isBefore(LocalDateTime.now())) {
+                    throw new IllegalArgumentException("Chuyến bay đã khởi hành, không thể hủy vé!");
                 }
 
                 Ticket ticket = ticketDAO.findByIdForUpdate(conn, booking.getTicketId()).orElse(null);
@@ -194,10 +212,10 @@ public class BookingService {
                 }
                 conn.commit();
             } catch (SQLException | RuntimeException ex) {
-                conn.rollback();
+                try { conn.rollback(); } catch (SQLException ignore) {}
                 throw ex;
             } finally {
-                conn.setAutoCommit(true);
+                try { conn.setAutoCommit(true); } catch (SQLException ignore) {}
             }
         }
     }
