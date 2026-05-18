@@ -78,6 +78,14 @@ public class FlightService {
             throw new IllegalArgumentException("Không tìm thấy chuyến bay ID=" + id);
         }
         flightDAO.updateStatus(id, status);
+
+        // Cascade trạng thái booking theo flight status
+        BookingService bookingService = new BookingService();
+        if (status == FlightStatus.ARRIVED) {
+            bookingService.markFlightArrived(id);
+        } else if (status == FlightStatus.CANCELLED) {
+            bookingService.cancelAllForFlight(id);
+        }
     }
 
     public void delete(Long id) throws SQLException {

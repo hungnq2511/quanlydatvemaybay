@@ -141,6 +141,11 @@ public class BookingPanel extends JPanel {
 
         boolean isAdmin = AuthService.getCurrentUser() != null && AuthService.getCurrentUser().isAdmin();
 
+        // Nút "Thanh toán" — chuyển PENDING → CONFIRMED
+        JButton btnPay = createButton("💳  Thanh toán", UIConstants.SECONDARY_COLOR);
+        btnPay.addActionListener(e -> confirmPaymentSelected());
+        panel.add(btnPay);
+
         if (isAdmin) {
             JButton btnEdit = createButton("Sửa", UIConstants.PRIMARY_COLOR);
             JButton btnStatus = createButton("Đổi TT", UIConstants.WARNING_COLOR);
@@ -155,6 +160,45 @@ public class BookingPanel extends JPanel {
         panel.add(btnCancel);
 
         return panel;
+    }
+
+    private void confirmPaymentSelected() {
+        Booking booking = getSelectedBooking();
+        if (booking == null) return;
+
+        if (booking.getStatus() != com.quanlydatvemaybay.enums.BookingStatus.PENDING) {
+            JOptionPane.showMessageDialog(this,
+                    "Chỉ có thể thanh toán vé đang ở trạng thái \"Chờ xác nhận\".\n"
+                  + "Trạng thái hiện tại: " + booking.getStatus().getDisplayName(),
+                    "Không thể thanh toán", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String price = booking.getTicketPrice() != null
+                ? String.format("%,.0f VNĐ", booking.getTicketPrice()) : "(chưa có)";
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "<html><b>Xác nhận thanh toán</b><br><br>"
+              + "Mã đặt vé: <b>" + booking.getBookingCode() + "</b><br>"
+              + "Chuyến: " + booking.getFlightCode() + " — " + booking.getDepartureAirport()
+              + " → " + booking.getArrivalAirport() + "<br>"
+              + "Ghế: " + booking.getSeatNumber() + "<br>"
+              + "Số tiền: <b style='color:#27ae60'>" + price + "</b><br><br>"
+              + "Tiếp tục thanh toán?</html>",
+                "Thanh toán vé", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            try {
+                bookingService.confirmPayment(booking.getId());
+                loadData(null, null, null);
+                JOptionPane.showMessageDialog(this,
+                        "Thanh toán thành công!\nVé chuyển sang trạng thái \"Đã xác nhận\".",
+                        "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Lỗi: " + e.getMessage(),
+                        "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     private void styleTable() {

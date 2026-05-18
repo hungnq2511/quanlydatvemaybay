@@ -27,6 +27,7 @@ public class BookingService {
     private final EmailService emailService = new EmailService();
 
     public List<Booking> getAll() throws SQLException {
+        autoUpdateStatuses(); // tự động đồng bộ trạng thái trước khi load
         User currentUser = AuthService.getCurrentUser();
         if (currentUser != null && !currentUser.isAdmin()) {
             return bookingDAO.findByCreatedBy(currentUser.getId());
@@ -35,6 +36,7 @@ public class BookingService {
     }
 
     public List<Booking> search(Long flightId, BookingStatus status, String passengerName) throws SQLException {
+        autoUpdateStatuses();
         User currentUser = AuthService.getCurrentUser();
         if (currentUser != null && !currentUser.isAdmin()) {
             return bookingDAO.searchByUser(currentUser.getId(), status);
@@ -269,6 +271,145 @@ public class BookingService {
         if (flight.getDepartureTime() != null
                 && flight.getDepartureTime().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Chuyến bay đã qua thời gian khởi hành!");
+        }
+    }
+
+    // ╔══════════════════════════════════════════════════════════════════════╗
+    // ║  WORKFLOW TRẠNG THÁI BOOKING                                          ║
+    // ╠══════════════════════════════════════════════════════════════════════╣
+    // ║  PENDING ──user thanh toán──> CONFIRMED ──auto khi arrived──> COMPLETED║
+    // ║     │                              │                                   ║
+    // ║     │                              └──> CANCELLED (user/admin hủy)    ║
+    // ║     │                                                                  ║
+    // ║     ├──auto: chuyến đã bay & chưa thanh toán──> CANCELLED              ║
+    // ║     └──cascade: flight CANCELLED──> CANCELLED                         ║
+    // ╚══════════════════════════════════════════════════════════════════════╝
+
+    /**
+     * User xác nhận thanh toán: PENDING → CONFIRMED.
+     *  - User chỉ confirm được vé của chính mình.
+     *  - Không cho confirm vé đã CANCELLED/COMPLETED.
+     *  - Không cho confirm sau giờ bay.
+     */
+    public void confirmPayment(Long id) throws SQLException {
+        User currentUser = AuthService.getCurrentUser();
+        Booking booking = bookingDAO.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đặt vé ID=" + id));
+
+        if (currentUser != null && !currentUser.isAdmin()
+                && !currentUser.getId().equals(booking.getCreatedBy())) {
+            throw new IllegalArgumentException("Bạn không có quyền xác nhận đặt vé này!");
+        }
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new IllegalArgumentException("Chỉ có thể thanh toán vé đang ở trạng thái \"Chờ xác nhận\". "
+                    + "Trạng thái hiện tại: " + booking.getStatus().getDisplayName());
+        }
+        if (booking.getDepartureTime() != null
+                && booking.getDepartureTime().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Chuyến bay đã khởi hành, không thể thanh toán!");
+        }
+
+        bookingDAO.updateStatus(id, BookingStatus.CONFIRMED);
+    }
+
+    /**
+     * Tự động đồng bộ trạng thái booking dựa theo thời gian thực:
+     *  - PENDING + chuyến đã bay → CANCELLED (hoàn ghế, vì khách quên thanh toán).
+     *  - CONFIRMED + chuyến đã đến → COMPLETED (vé đã sử dụng).
+     * Gọi mỗi lần load danh sách booking để giữ data luôn cập nhật.
+     */
+    public void autoUpdateStatuses() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // PENDING đã quá giờ bay → CANCELLED + hoàn ghế
+        try {
+            List<Booking> expiredPending = bookingDAO.findPendingBeforeDeparture(now);
+            for (Booking b : expiredPending) {
+                try { cancelInternal(b.getId(), true); }
+                catch (Exception ex) { System.err.println("[WARN] auto-cancel " + b.getBookingCode() + ": " + ex.getMessage()); }
+            }
+        } catch (SQLException ex) {
+            System.err.println("[WARN] autoUpdateStatuses (pending): " + ex.getMessage());
+        }
+
+        // CONFIRMED đã đến nơi → COMPLETED
+        try {
+            List<Booking> arrived = bookingDAO.findConfirmedAfterArrival(now);
+            for (Booking b : arrived) {
+                try { bookingDAO.updateStatus(b.getId(), BookingStatus.COMPLETED); }
+                catch (Exception ex) { System.err.println("[WARN] auto-complete " + b.getBookingCode() + ": " + ex.getMessage()); }
+            }
+        } catch (SQLException ex) {
+            System.err.println("[WARN] autoUpdateStatuses (confirmed): " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Cascade khi flight chuyển sang ARRIVED: tất cả booking CONFIRMED → COMPLETED.
+     */
+    public int markFlightArrived(Long flightId) throws SQLException {
+        List<Booking> list = bookingDAO.findConfirmedByFlightId(flightId);
+        for (Booking b : list) {
+            bookingDAO.updateStatus(b.getId(), BookingStatus.COMPLETED);
+        }
+        return list.size();
+    }
+
+    /**
+     * Cascade khi flight bị CANCELLED: tất cả booking chưa hủy/hoàn thành → CANCELLED.
+     * Có hoàn ghế (mặc dù chuyến đã hủy không còn ý nghĩa, vẫn cập nhật cho data sạch).
+     */
+    public int cancelAllForFlight(Long flightId) throws SQLException {
+        List<Booking> list = bookingDAO.findActiveByFlightId(flightId);
+        int count = 0;
+        for (Booking b : list) {
+            try {
+                cancelInternal(b.getId(), false);
+                count++;
+            } catch (Exception ex) {
+                System.err.println("[WARN] cascade-cancel " + b.getBookingCode() + ": " + ex.getMessage());
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Cancel "nội bộ" — bỏ qua permission check (dùng cho cascade & auto-update).
+     * @param refundFlightSeat true nếu cần cộng lại availableSeats của Flight
+     */
+    private void cancelInternal(Long id, boolean refundFlightSeat) throws SQLException {
+        try (Connection conn = DatabaseConfig.getInstance().newConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                Booking booking = bookingDAO.findById(conn, id)
+                        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đặt vé ID=" + id));
+
+                if (booking.getStatus() == BookingStatus.CANCELLED) {
+                    conn.commit();
+                    return;
+                }
+
+                Ticket ticket = ticketDAO.findByIdForUpdate(conn, booking.getTicketId()).orElse(null);
+                bookingDAO.updateStatus(conn, id, BookingStatus.CANCELLED);
+
+                if (ticket != null && ticket.getStatus() == TicketStatus.BOOKED) {
+                    ticketDAO.updateStatus(conn, ticket.getId(), TicketStatus.AVAILABLE);
+                    if (refundFlightSeat) {
+                        Flight flight = flightDAO.findByIdForUpdate(conn, ticket.getFlightId()).orElse(null);
+                        if (flight != null) {
+                            int newAvailable = flight.getAvailableSeats() + 1;
+                            if (newAvailable > flight.getTotalSeats()) newAvailable = flight.getTotalSeats();
+                            flightDAO.updateAvailableSeats(conn, flight.getId(), newAvailable);
+                        }
+                    }
+                }
+                conn.commit();
+            } catch (SQLException | RuntimeException ex) {
+                try { conn.rollback(); } catch (SQLException ignore) {}
+                throw ex;
+            } finally {
+                try { conn.setAutoCommit(true); } catch (SQLException ignore) {}
+            }
         }
     }
 
