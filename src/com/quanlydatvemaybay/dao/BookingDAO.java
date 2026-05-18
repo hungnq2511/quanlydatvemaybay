@@ -41,6 +41,9 @@ public class BookingDAO {
         if (createdTs != null) b.setCreatedDate(createdTs.toLocalDateTime());
         Timestamp updatedTs = rs.getTimestamp("UPDATED_DATE");
         if (updatedTs != null) b.setUpdatedDate(updatedTs.toLocalDateTime());
+        // FIX: đọc CREATED_BY để ownership check (getById) hoạt động đúng
+        long createdBy = rs.getLong("CREATED_BY");
+        if (!rs.wasNull()) b.setCreatedBy(createdBy);
         return b;
     }
 
