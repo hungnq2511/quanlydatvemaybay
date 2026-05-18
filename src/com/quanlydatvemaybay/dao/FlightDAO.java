@@ -106,7 +106,10 @@ public class FlightDAO {
             ps.setTimestamp(5, Timestamp.valueOf(f.getDepartureTime()));
             ps.setTimestamp(6, Timestamp.valueOf(f.getArrivalTime()));
             ps.setInt(7, f.getTotalSeats());
-            ps.setInt(8, f.getTotalSeats());
+            // FIX: dùng availableSeats truyền vào thay vì luôn = totalSeats
+            int avail = f.getAvailableSeats() > 0 ? f.getAvailableSeats() : f.getTotalSeats();
+            if (avail > f.getTotalSeats()) avail = f.getTotalSeats();
+            ps.setInt(8, avail);
             ps.setBigDecimal(9, f.getPrice());
             ps.setString(10, f.getStatus() != null ? f.getStatus().name() : FlightStatus.SCHEDULED.name());
             ps.setTimestamp(11, Timestamp.valueOf(LocalDateTime.now()));
@@ -188,6 +191,69 @@ public class FlightDAO {
             }
         }
         return false;
+    }
+
+    // ======= TRANSACTION-AWARE OVERLOADS (cho BookingService) =======
+
+    public Optional<Flight> findByIdForUpdate(Connection conn, Long id) throws SQLException {
+        String sql = "SELECT * FROM FLIGHT WHERE ID = ? FOR UPDATE";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return Optional.of(mapRow(rs));
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void updateAvailableSeats(Connection conn, Long id, int availableSeats) throws SQLException {
+        String sql = "UPDATE FLIGHT SET AVAILABLE_SEATS=?, UPDATED_DATE=? WHERE ID=?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, availableSeats);
+            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setLong(3, id);
+            ps.executeUpdate();
+        }
+    }
+
+    // ======= SMART SEARCH (cho tính năng tìm thông minh) =======
+
+    /**
+     * Tìm chuyến bay theo điểm đi/đến và khoảng ngày (departureDate ± dayRange).
+     * Chỉ trả về các chuyến SCHEDULED và còn ghế trống. Sắp xếp theo
+     * khoảng cách thời gian gần với mốc ngày yêu cầu.
+     */
+    public List<Flight> searchSmart(String departure, String arrival,
+                                    LocalDateTime targetDate, int dayRangeBefore, int dayRangeAfter) throws SQLException {
+        List<Flight> list = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "SELECT * FROM FLIGHT WHERE STATUS = 'SCHEDULED' AND AVAILABLE_SEATS > 0");
+        if (departure != null && !departure.isEmpty())
+            sql.append(" AND UPPER(DEPARTURE_AIRPORT) LIKE UPPER(?)");
+        if (arrival != null && !arrival.isEmpty())
+            sql.append(" AND UPPER(ARRIVAL_AIRPORT) LIKE UPPER(?)");
+        if (targetDate != null) {
+            sql.append(" AND DEPARTURE_TIME BETWEEN ? AND ?");
+        }
+        sql.append(" ORDER BY DEPARTURE_TIME ASC");
+
+        try (PreparedStatement ps = getConnection().prepareStatement(sql.toString())) {
+            int idx = 1;
+            if (departure != null && !departure.isEmpty())
+                ps.setString(idx++, "%" + departure + "%");
+            if (arrival != null && !arrival.isEmpty())
+                ps.setString(idx++, "%" + arrival + "%");
+            if (targetDate != null) {
+                LocalDateTime from = targetDate.toLocalDate().atStartOfDay().minusDays(dayRangeBefore);
+                LocalDateTime to = targetDate.toLocalDate().atTime(23, 59, 59).plusDays(dayRangeAfter);
+                ps.setTimestamp(idx++, Timestamp.valueOf(from));
+                ps.setTimestamp(idx++, Timestamp.valueOf(to));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        }
+        return list;
     }
 
     public String generateNextCode(String airlinePrefix) throws SQLException {

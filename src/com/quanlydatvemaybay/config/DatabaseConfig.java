@@ -11,33 +11,51 @@ public class DatabaseConfig {
     private static final String PASSWORD = "123456";
 
     private static DatabaseConfig instance;
-    private Connection connection;
+    private Connection sharedConnection;
 
     private DatabaseConfig() {}
 
-    public static DatabaseConfig getInstance() {
+    public static synchronized DatabaseConfig getInstance() {
         if (instance == null) {
             instance = new DatabaseConfig();
         }
         return instance;
     }
 
-    public Connection getConnection() throws SQLException {
-        if (connection == null || connection.isClosed()) {
+    /**
+     * Connection chia sẻ – dùng cho các thao tác đọc đơn giản (DAO hiện tại).
+     * KHÔNG dùng cho transaction nhiều bước có race condition.
+     */
+    public synchronized Connection getConnection() throws SQLException {
+        if (sharedConnection == null || sharedConnection.isClosed()) {
             try {
                 Class.forName("oracle.jdbc.driver.OracleDriver");
-                connection = DriverManager.getConnection(URL, USERNAME, PASSWORD);
+                sharedConnection = DriverManager.getConnection(URL, USERNAME, PASSWORD);
             } catch (ClassNotFoundException e) {
                 throw new SQLException("Oracle JDBC Driver not found: " + e.getMessage());
             }
         }
-        return connection;
+        return sharedConnection;
+    }
+
+    /**
+     * Tạo Connection mới độc lập – BẮT BUỘC dùng cho các thao tác có transaction
+     * (đặt vé, hủy vé) để có thể setAutoCommit(false) + SELECT FOR UPDATE.
+     * Caller phải tự đóng connection (try-with-resources).
+     */
+    public Connection newConnection() throws SQLException {
+        try {
+            Class.forName("oracle.jdbc.driver.OracleDriver");
+            return DriverManager.getConnection(URL, USERNAME, PASSWORD);
+        } catch (ClassNotFoundException e) {
+            throw new SQLException("Oracle JDBC Driver not found: " + e.getMessage());
+        }
     }
 
     public void closeConnection() {
         try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
+            if (sharedConnection != null && !sharedConnection.isClosed()) {
+                sharedConnection.close();
             }
         } catch (SQLException e) {
             e.printStackTrace();
