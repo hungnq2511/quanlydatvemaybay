@@ -40,25 +40,15 @@ public class BookingDialog extends JDialog {
     private JComboBox<String> cmbStatus;
     private List<Flight> flightList = new ArrayList<>();
     private List<Ticket> ticketList = new ArrayList<>();
-    private Long preselectedFlightId;
 
     public BookingDialog(Frame parent, Booking booking) {
-        this(parent, booking, null);
-    }
-
-    /**
-     * Mở dialog đặt vé và chọn sẵn 1 chuyến bay (vd: từ Smart Search).
-     */
-    public BookingDialog(Frame parent, Booking booking, Long preselectedFlightId) {
         super(parent, booking == null ? "Đặt vé mới" : "Sửa đặt vé", true);
         this.booking = booking;
-        this.preselectedFlightId = preselectedFlightId;
         setSize(720, booking == null ? 720 : 460);
         setLocationRelativeTo(parent);
         setResizable(true);
         initUI();
         if (booking != null) fillData();
-        if (booking == null && preselectedFlightId != null) selectPreselectedFlight();
     }
 
     private void initUI() {
@@ -252,15 +242,6 @@ public class BookingDialog extends JDialog {
         }
     }
 
-    private void selectPreselectedFlight() {
-        if (cmbFlight == null) return;
-        for (int i = 0; i < flightList.size(); i++) {
-            if (flightList.get(i).getId().equals(preselectedFlightId)) {
-                cmbFlight.setSelectedIndex(i + 1); // +1 vì idx 0 là placeholder
-                return;
-            }
-        }
-    }
 
     private void fillData() {
         txtName.setText(booking.getPassengerName());

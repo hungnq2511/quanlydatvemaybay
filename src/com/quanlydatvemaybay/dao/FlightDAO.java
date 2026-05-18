@@ -216,46 +216,6 @@ public class FlightDAO {
         }
     }
 
-    // ======= SMART SEARCH (cho tính năng tìm thông minh) =======
-
-    /**
-     * Tìm chuyến bay theo điểm đi/đến và khoảng ngày (departureDate ± dayRange).
-     * Chỉ trả về các chuyến SCHEDULED và còn ghế trống. Sắp xếp theo
-     * khoảng cách thời gian gần với mốc ngày yêu cầu.
-     */
-    public List<Flight> searchSmart(String departure, String arrival,
-                                    LocalDateTime targetDate, int dayRangeBefore, int dayRangeAfter) throws SQLException {
-        List<Flight> list = new ArrayList<>();
-        StringBuilder sql = new StringBuilder(
-                "SELECT * FROM FLIGHT WHERE STATUS = 'SCHEDULED' AND AVAILABLE_SEATS > 0");
-        if (departure != null && !departure.isEmpty())
-            sql.append(" AND UPPER(DEPARTURE_AIRPORT) LIKE UPPER(?)");
-        if (arrival != null && !arrival.isEmpty())
-            sql.append(" AND UPPER(ARRIVAL_AIRPORT) LIKE UPPER(?)");
-        if (targetDate != null) {
-            sql.append(" AND DEPARTURE_TIME BETWEEN ? AND ?");
-        }
-        sql.append(" ORDER BY DEPARTURE_TIME ASC");
-
-        try (PreparedStatement ps = getConnection().prepareStatement(sql.toString())) {
-            int idx = 1;
-            if (departure != null && !departure.isEmpty())
-                ps.setString(idx++, "%" + departure + "%");
-            if (arrival != null && !arrival.isEmpty())
-                ps.setString(idx++, "%" + arrival + "%");
-            if (targetDate != null) {
-                LocalDateTime from = targetDate.toLocalDate().atStartOfDay().minusDays(dayRangeBefore);
-                LocalDateTime to = targetDate.toLocalDate().atTime(23, 59, 59).plusDays(dayRangeAfter);
-                ps.setTimestamp(idx++, Timestamp.valueOf(from));
-                ps.setTimestamp(idx++, Timestamp.valueOf(to));
-            }
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) list.add(mapRow(rs));
-            }
-        }
-        return list;
-    }
-
     public String generateNextCode(String airlinePrefix) throws SQLException {
         String sql = "SELECT FLIGHT_CODE FROM FLIGHT WHERE FLIGHT_CODE LIKE ?";
         int maxNum = 0;

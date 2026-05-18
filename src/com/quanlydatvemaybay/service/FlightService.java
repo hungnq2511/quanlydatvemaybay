@@ -8,10 +8,8 @@ import com.quanlydatvemaybay.enums.TicketStatus;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class FlightService {
 
@@ -47,22 +45,6 @@ public class FlightService {
         return flightDAO.save(flight);
     }
 
-    /**
-     * Tìm chuyến bay thông minh: theo điểm đi/đến và ngày khởi hành (± dayRange).
-     * Trả về danh sách sắp xếp theo khoảng cách thời gian gần với ngày yêu cầu.
-     */
-    public List<Flight> searchSmart(String departure, String arrival,
-                                    LocalDateTime targetDate, int dayRangeBefore, int dayRangeAfter) throws SQLException {
-        List<Flight> list = flightDAO.searchSmart(departure, arrival, targetDate, dayRangeBefore, dayRangeAfter);
-        if (targetDate != null) {
-            final LocalDateTime ref = targetDate;
-            list = list.stream()
-                    .sorted(Comparator.comparingLong(f -> Math.abs(
-                            java.time.Duration.between(ref, f.getDepartureTime()).toMinutes())))
-                    .collect(Collectors.toList());
-        }
-        return list;
-    }
 
     public Flight update(Long id, Flight flight) throws SQLException {
         Flight existing = flightDAO.findById(id)

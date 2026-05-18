@@ -5,7 +5,6 @@ import com.quanlydatvemaybay.enums.FlightStatus;
 import com.quanlydatvemaybay.service.FlightService;
 import com.quanlydatvemaybay.ui.UIConstants;
 import com.quanlydatvemaybay.ui.dialogs.FlightDialog;
-import com.quanlydatvemaybay.ui.dialogs.SmartSearchDialog;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -64,7 +63,6 @@ public class FlightPanel extends JPanel {
         txtSearch.setToolTipText("Tìm kiếm...");
 
         JButton btnSearch = createButton("Tìm kiếm", UIConstants.PRIMARY_COLOR);
-        JButton btnSmart = createButton("Tìm thông minh", new Color(142, 68, 173));
         JButton btnRefresh = createButton("Làm mới", new Color(100, 100, 100));
         JButton btnAdd = createButton("+ Thêm chuyến bay", UIConstants.SECONDARY_COLOR);
 
@@ -73,14 +71,7 @@ public class FlightPanel extends JPanel {
         searchPanel.add(cmbSearchType);
         searchPanel.add(txtSearch);
         searchPanel.add(btnSearch);
-        searchPanel.add(btnSmart);
         searchPanel.add(btnRefresh);
-
-        btnSmart.addActionListener(e -> {
-            SmartSearchDialog dlg = new SmartSearchDialog((Frame) SwingUtilities.getWindowAncestor(this));
-            dlg.setVisible(true);
-            loadData(null, null, null);
-        });
 
         JPanel addPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
         addPanel.setBackground(Color.WHITE);
