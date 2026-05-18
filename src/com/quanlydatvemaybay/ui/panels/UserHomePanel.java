@@ -281,9 +281,9 @@ public class UserHomePanel extends JPanel {
         time.setFont(UIConstants.SMALL_FONT);
         time.setForeground(new Color(80, 80, 80));
 
-        JLabel price = new JLabel(f.getPrice() != null ? String.format("%,.0f VNĐ", f.getPrice()) : "");
-        price.setFont(new Font(UIConstants.HEADER_FONT.getFontName(), Font.BOLD, 16));
-        price.setForeground(UIConstants.SECONDARY_COLOR);
+        JLabel seats = new JLabel("Còn " + f.getAvailableSeats() + " ghế trống");
+        seats.setFont(new Font(UIConstants.HEADER_FONT.getFontName(), Font.BOLD, 14));
+        seats.setForeground(UIConstants.SECONDARY_COLOR);
 
         JPanel info = new JPanel();
         info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
@@ -294,7 +294,7 @@ public class UserHomePanel extends JPanel {
         info.add(Box.createVerticalStrut(2));
         info.add(time);
         info.add(Box.createVerticalStrut(8));
-        info.add(price);
+        info.add(seats);
 
         JButton btn = new JButton("Đặt ngay");
         btn.setFont(UIConstants.BUTTON_FONT);
