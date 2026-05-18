@@ -63,12 +63,31 @@ public class UserService {
         userDAO.update(user);
     }
 
-    /** Đổi mật khẩu */
+    /** Đổi mật khẩu (admin) */
     public void changePassword(Long id, String newPassword) throws SQLException {
         if (newPassword == null || newPassword.length() < 6)
             throw new IllegalArgumentException("Mật khẩu mới phải có ít nhất 6 ký tự!");
         userDAO.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng ID=" + id));
+        userDAO.updatePassword(id, hashPassword(newPassword));
+    }
+
+    /** User tự đổi mật khẩu — yêu cầu xác thực mật khẩu cũ */
+    public void changeOwnPassword(Long id, String oldPassword, String newPassword) throws SQLException {
+        if (oldPassword == null || oldPassword.isEmpty())
+            throw new IllegalArgumentException("Vui lòng nhập mật khẩu hiện tại!");
+        if (newPassword == null || newPassword.length() < 6)
+            throw new IllegalArgumentException("Mật khẩu mới phải có ít nhất 6 ký tự!");
+        if (oldPassword.equals(newPassword))
+            throw new IllegalArgumentException("Mật khẩu mới phải khác mật khẩu hiện tại!");
+
+        User user = userDAO.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng ID=" + id));
+
+        String oldHashed = hashPassword(oldPassword);
+        if (!oldHashed.equals(user.getPassword()))
+            throw new IllegalArgumentException("Mật khẩu hiện tại không đúng!");
+
         userDAO.updatePassword(id, hashPassword(newPassword));
     }
 

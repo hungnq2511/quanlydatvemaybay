@@ -7,8 +7,11 @@ import com.quanlydatvemaybay.ui.panels.AirportPanel;
 import com.quanlydatvemaybay.ui.panels.BookingPanel;
 import com.quanlydatvemaybay.ui.panels.DashboardPanel;
 import com.quanlydatvemaybay.ui.panels.FlightPanel;
+import com.quanlydatvemaybay.ui.panels.MyAccountPanel;
 import com.quanlydatvemaybay.ui.panels.TicketPanel;
+import com.quanlydatvemaybay.ui.panels.UserHomePanel;
 import com.quanlydatvemaybay.ui.panels.UserPanel;
+import com.quanlydatvemaybay.ui.panels.UserSearchPanel;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -28,6 +31,9 @@ public class MainFrame extends JFrame {
     private UserPanel userPanel;
     private AirlinePanel airlinePanel;
     private AirportPanel airportPanel;
+    private UserHomePanel userHomePanel;
+    private UserSearchPanel userSearchPanel;
+    private MyAccountPanel myAccountPanel;
 
     public MainFrame() {
         setTitle("Quản Lý Đặt Vé Máy Bay");
@@ -49,32 +55,69 @@ public class MainFrame extends JFrame {
         cardLayout = new CardLayout();
         contentPanel = new JPanel(cardLayout);
         contentPanel.setBackground(UIConstants.BG_COLOR);
-        dashboardPanel = new DashboardPanel();
-        flightPanel    = new FlightPanel();
-        ticketPanel    = new TicketPanel();
-        bookingPanel   = new BookingPanel();
-        userPanel      = new UserPanel();
-        airlinePanel   = new AirlinePanel();
-        airportPanel   = new AirportPanel();
-
         User currentUser = AuthService.getCurrentUser();
         boolean isAdmin = currentUser != null && currentUser.isAdmin();
 
         if (isAdmin) {
+            dashboardPanel = new DashboardPanel();
+            flightPanel    = new FlightPanel();
+            ticketPanel    = new TicketPanel();
+            userPanel      = new UserPanel();
+            airlinePanel   = new AirlinePanel();
+            airportPanel   = new AirportPanel();
+            bookingPanel   = new BookingPanel();
+
             contentPanel.add(dashboardPanel, "dashboard");
             contentPanel.add(flightPanel,    "flights");
             contentPanel.add(ticketPanel,    "tickets");
             contentPanel.add(userPanel,      "users");
             contentPanel.add(airlinePanel,   "airlines");
             contentPanel.add(airportPanel,   "airports");
+            contentPanel.add(bookingPanel,   "bookings");
+        } else {
+            userHomePanel   = new UserHomePanel();
+            userSearchPanel = new UserSearchPanel();
+            bookingPanel    = new BookingPanel();
+            myAccountPanel  = new MyAccountPanel();
+
+            userHomePanel.setNavigator(this::navigateTo);
+
+            contentPanel.add(userHomePanel,   "home");
+            contentPanel.add(userSearchPanel, "search");
+            contentPanel.add(bookingPanel,    "bookings");
+            contentPanel.add(myAccountPanel,  "account");
         }
-        contentPanel.add(bookingPanel, "bookings");
 
         root.add(sidebar, BorderLayout.WEST);
         root.add(contentPanel, BorderLayout.CENTER);
         setContentPane(root);
 
-        showPanel(isAdmin ? "dashboard" : "bookings", null);
+        showPanel(isAdmin ? "dashboard" : "home", null);
+    }
+
+    /** Navigate qua tên panel — không highlight nút (vì gọi từ panel khác). */
+    private void navigateTo(String name) {
+        // Tìm nút có panelName tương ứng để cũng highlight
+        for (Component c : findNavButtons()) {
+            if (c instanceof JButton && name.equals(c.getName())) {
+                showPanel(name, (JButton) c);
+                return;
+            }
+        }
+        showPanel(name, null);
+    }
+
+    private java.util.List<Component> findNavButtons() {
+        java.util.List<Component> list = new java.util.ArrayList<>();
+        collectButtons(getContentPane(), list);
+        return list;
+    }
+
+    private void collectButtons(Container c, java.util.List<Component> out) {
+        for (Component child : c.getComponents()) {
+            if (child instanceof JButton && child.getName() != null) out.add(child);
+            if (child instanceof Container) collectButtons((Container) child, out);
+        }
     }
 
     private JPanel createSidebar() {
@@ -118,7 +161,10 @@ public class MainFrame extends JFrame {
             addNavItem(navPanel, "  Địa điểm",    "airports");
             addNavItem(navPanel, "  Người dùng",  "users");
         } else {
-            addNavItem(navPanel, "  Đặt vé", "bookings");
+            addNavItem(navPanel, "  🏠  Trang chủ",      "home");
+            addNavItem(navPanel, "  🔍  Tìm chuyến bay", "search");
+            addNavItem(navPanel, "  🎫  Vé của tôi",     "bookings");
+            addNavItem(navPanel, "  👤  Tài khoản",      "account");
         }
 
         // Bottom - logout
@@ -157,6 +203,7 @@ public class MainFrame extends JFrame {
 
     private void addNavItem(JPanel navPanel, String text, String panelName) {
         JButton btn = new JButton(text);
+        btn.setName(panelName);
         btn.setFont(UIConstants.NORMAL_FONT);
         btn.setBackground(UIConstants.SIDEBAR_BG);
         btn.setForeground(UIConstants.SIDEBAR_TEXT);
@@ -191,12 +238,17 @@ public class MainFrame extends JFrame {
             btnActive = btn;
         }
         cardLayout.show(contentPanel, name);
-        if ("dashboard".equals(name)) dashboardPanel.refresh();
-        else if ("flights".equals(name)) flightPanel.refresh();
-        else if ("tickets".equals(name)) ticketPanel.refresh();
-        else if ("bookings".equals(name)) bookingPanel.refresh();
-        else if ("users".equals(name))    userPanel.refresh();
-        else if ("airlines".equals(name)) airlinePanel.refresh();
-        else if ("airports".equals(name)) airportPanel.refresh();
+        switch (name) {
+            case "dashboard": if (dashboardPanel != null) dashboardPanel.refresh(); break;
+            case "flights":   if (flightPanel    != null) flightPanel.refresh();    break;
+            case "tickets":   if (ticketPanel    != null) ticketPanel.refresh();    break;
+            case "bookings":  if (bookingPanel   != null) bookingPanel.refresh();   break;
+            case "users":     if (userPanel      != null) userPanel.refresh();      break;
+            case "airlines":  if (airlinePanel   != null) airlinePanel.refresh();   break;
+            case "airports":  if (airportPanel   != null) airportPanel.refresh();   break;
+            case "home":      if (userHomePanel  != null) userHomePanel.refresh();  break;
+            case "search":    if (userSearchPanel!= null) userSearchPanel.refresh();break;
+            case "account":   if (myAccountPanel != null) myAccountPanel.refresh(); break;
+        }
     }
 }
